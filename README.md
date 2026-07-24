@@ -34,7 +34,7 @@ The goal is not to replace C, hide C, or paper over the system. It's to make the
 | Module | Status |
 |--------|--------|
 | `std/memory` — allocator abstraction (manual, dynamic, arena, temp, leak) | ✅ Implemented & tested |
-| `std/strings` — allocator-backed string type | 🚧 Planned |
+| `std/strings` — allocator-backed string type (48 functions) | ✅ Implemented & tested |
 | Everything else | 📋 Roadmap |
 
 ### Memory system — done
@@ -70,6 +70,54 @@ Allocator *a = mem_allocators_manual(256);
 a = mem_convert_allocator(a, MEM_ARENA);  // now has clear/reset
 ```
 
+### String system — done
+
+48 functions, one consistent `str_*` prefix:
+
+```c
+#include <quasar/std/strings.h>
+
+Allocator *arena = mem_allocators_arena();
+
+// Creation
+str_t hello = str_from(arena, "Hello");
+str_t world = str_from(arena, "Quasar");
+
+// Concatenation
+str_t message = str_cat(arena, hello, str_from(arena, ", "));
+message = str_cat(arena, message, world);
+
+printf("%s\n", str_cstr(message));  // "Hello, Quasar"
+
+// Query, compare, transform — all O(1) length, all allocator-owned
+str_t upper = str_to_upper(arena, message);
+str_t trimmed = str_trim(arena, str_from(arena, "  clean  "));
+
+// Split and join
+size_t count;
+str_t *parts = str_split(arena, str_from(arena, "a,b,c"),
+                         str_from(arena, ","), &count);
+str_t joined = str_join(arena, parts, count, str_from(arena, "-"));
+// joined = "a-b-c"
+
+// Bulk-free everything
+mem_allocator_free(arena);
+```
+
+| Category | Example functions |
+|----------|------------------|
+| **Creation** | `str_from`, `str_from_n`, `str_empty`, `str_dup`, `str_fmt` |
+| **Inspection** | `str_len`, `str_is_empty`, `str_cstr`, `str_data` |
+| **Predicates** | `str_starts_with`, `str_ends_with`, `str_contains`, `str_is_whitespace` |
+| **Comparison** | `str_equals`, `str_equals_icase`, `str_compare`, `str_compare_n` |
+| **Building** | `str_cat`, `str_join`, `str_prepend`, `str_append` |
+| **Slicing** | `str_slice`, `str_substr`, `str_head`, `str_tail` |
+| **Transform** | `str_trim`, `str_to_lower`, `str_to_upper`, `str_replace`, `str_reverse` |
+| **Search** | `str_index_of`, `str_last_index_of`, `str_count`, `str_split` |
+| **Utility** | `str_clear`, `str_hash`, `str_repeat`, `str_copy` |
+
+Strings integrate directly with the allocator system — pass any `Allocator *` to control lifetime.
+
 ---
 
 ## Structure
@@ -104,17 +152,19 @@ file_*       path_*       time_*        env_*
 - [x] 16-byte aligned allocation
 - [x] Comprehensive test suite (56 tests)
 
-### Phase 2 — Strings
+### Phase 2 — Strings ✅
 
-- [ ] `str_t` — allocator-backed string type
-- [ ] Creation: `str_from()`, `str_from_len()`, `str_dup()`, `str_fmt()`
-- [ ] Inspection: `str_len()`, `str_is_empty()`, `str_starts_with()`, `str_contains()`
-- [ ] Comparison: `str_equals()`, `str_equals_icase()`
-- [ ] Mutation: `str_cat()`, `str_insert()`, `str_remove()`, `str_replace()`
-- [ ] Search: `str_index_of()`, `str_count()`
-- [ ] Transform: `str_trim()`, `str_to_lower()`, `str_to_upper()`
-- [ ] Split/join: `str_split()`, `str_join()`
-- [ ] Slice: `str_slice()`, `str_substr()`
+- [x] `str_t` — allocator-backed string type (`{ char *data; size_t len }`)
+- [x] Creation: `str_from()`, `str_from_n()`, `str_empty()`, `str_dup()`, `str_dup_n()`, `str_fmt()`, `str_fmt_va()`
+- [x] Inspection: `str_len()`, `str_is_empty()`, `str_cstr()`, `str_data()`
+- [x] Predicates: `str_starts_with()`, `str_ends_with()`, `str_contains()`, `str_contains_char()`, `str_is_whitespace()`
+- [x] Comparison: `str_equals()`, `str_equals_icase()`, `str_compare()`, `str_compare_icase()`, `str_compare_n()`
+- [x] Building: `str_cat()`, `str_cat_cstr()`, `str_cat_char()`, `str_prepend()`, `str_append()`, `str_join()`
+- [x] Search: `str_index_of()`, `str_last_index_of()`, `str_count()`
+- [x] Transform: `str_trim()`, `str_trim_left()`, `str_trim_right()`, `str_to_lower()`, `str_to_upper()`, `str_replace()`, `str_reverse()`
+- [x] Slicing: `str_slice()`, `str_substr()`, `str_head()`, `str_tail()`, `str_remove_prefix()`, `str_remove_suffix()`
+- [x] Split/repeat: `str_split()`, `str_repeat()`
+- [x] Utility: `str_copy()`, `str_clear()`, `str_hash()`
 
 ### Phase 3 — Data Structures
 
@@ -160,6 +210,7 @@ Individual modules can be compiled standalone:
 
 ```sh
 gcc -std=c11 -I include -c src/quasar/std/memory.c
+gcc -std=c11 -I include -c src/quasar/std/strings.c
 ```
 
 ---
