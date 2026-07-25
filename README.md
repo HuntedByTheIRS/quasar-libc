@@ -37,6 +37,7 @@ The goal is not to replace C, hide C, or paper over the system. It's to make the
 | `std/strings` — allocator-backed string type (48 functions) | ✅ Implemented & tested |
 | `std/datatypes` — dynamic arrays, hash maps, linked lists, ring buffers, typed vectors | ✅ Implemented |
 | `std/simd` — portable SIMD vectors (128/256/512-bit, 18 types, 20+ ops) | ✅ Implemented |
+| `std/files` — path manipulation and filesystem operations (70 functions) | ✅ Implemented |
 | System utilities | 📋 Roadmap |
 
 ### Memory system — done
@@ -273,7 +274,7 @@ path_*       time_*       env_*
 ### Phase 4 — System
 
 - [ ] Process management (`proc_*`)
-- [ ] Filesystem operations (`file_*`, `path_*`)
+- [x] Filesystem operations (`file_*`, `path_*)`
 - [ ] Time utilities (`time_*`)
 - [ ] Environment (`env_*`)
 
