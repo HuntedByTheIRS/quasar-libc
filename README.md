@@ -35,7 +35,9 @@ The goal is not to replace C, hide C, or paper over the system. It's to make the
 |--------|--------|
 | `std/memory` — allocator abstraction (manual, dynamic, arena, temp, leak) | ✅ Implemented & tested |
 | `std/strings` — allocator-backed string type (48 functions) | ✅ Implemented & tested |
-| Everything else | 📋 Roadmap |
+| `std/datatypes` — dynamic arrays, hash maps, linked lists, ring buffers, typed vectors | ✅ Implemented |
+| `std/simd` — portable SIMD vectors (128/256/512-bit, 18 types, 20+ ops) | ✅ Implemented |
+| System utilities | 📋 Roadmap |
 
 ### Memory system — done
 
@@ -118,6 +120,90 @@ mem_allocator_free(arena);
 
 Strings integrate directly with the allocator system — pass any `Allocator *` to control lifetime.
 
+### Data structures — done
+
+Six data structure families, all allocator-backed:
+
+```c
+#include <quasar/std/datatypes.h>
+
+Allocator *arena = mem_allocators_arena();
+
+// ── Dynamic arrays (contiguous, resizable) ──
+array_t arr = array_new(arena, sizeof(int));
+array_push(&arr, &(int){42});
+int *val = array_at(arr, 0);           // &42
+
+// ── Typed vectors (type-safe wrappers) ──
+vec_ti32 nums = vec_i32_new(arena);
+vec_i32_push(&nums, 10);
+vec_i32_push(&nums, 20);
+int32_t v = vec_i32_at(nums, 1);       // 20
+
+// String vector
+vec_tstr parts = vec_str_new(arena);
+vec_str_push(&parts, str_from(arena, "a"));
+
+// ── Hash map (str_t → str_t, open addressing, FNV-1a) ──
+map_t map = map_new(arena);
+map_insert(&map, str_from(arena, "key"), str_from(arena, "val"));
+str_t val = map_get(map, str_from(arena, "key"));  // "val"
+
+// ── Linked lists (singly + doubly) ──
+list_t list = list_new(arena, sizeof(int));
+list_push_back(&list, &(int){1});
+
+// ── Ring buffer (fixed or dynamic capacity) ──
+ring_t ring = ring_new(arena, sizeof(int), 128);
+ring_push(&ring, &(int){7});
+
+// Bulk-free everything
+mem_allocator_free(arena);
+```
+
+| Structure | Type | Key operations |
+|-----------|------|---------------|
+| **Dynamic array** | `array_t` | `push`, `pop`, `insert`, `remove`, `reserve`, `resize`, `shrink_to_fit` |
+| **Typed vectors** | `vec_ti8`–`vec_ti64`, `vec_tf32/f64`, `vec_tstr` | Type-safe wrappers via `DECLARE_VEC_TYPE` macro |
+| **Generic vector** | `vec_v` | `vec_new`, `vec_push`, `vec_at` — `array_t` alias |
+| **Hash map** | `map_t` | `insert`, `get`, `contains`, `remove`, `reserve` |
+| **Singly linked list** | `list_t` | `push_front/back`, `pop_front/back`, node accessors |
+| **Doubly linked list** | `dlist_t` | Same + `insert_before/after`, bidirectional traversal |
+| **Ring buffer** | `ring_t` | `push`/`pop` O(1), fixed + dynamic variants |
+
+Built-in hash functions for common types: `hash_i32()`, `hash_f64()`, `hash_str()`, `hash_bytes()`, etc.
+
+### SIMD vectors — done
+
+18 fixed-width vector types across 3 widths (128/256/512-bit), with 20+ operations per type. Compile-time backend selection: AVX-512 → AVX2 → SSE2 → NEON → scalar fallback.
+
+```c
+#include <quasar/std/simd.h>
+
+// 128-bit: 4 × float
+vec_4f32 a = {1.0f, 2.0f, 3.0f, 4.0f};
+vec_4f32 b = {5.0f, 6.0f, 7.0f, 8.0f};
+
+vec_4f32 c = vec_4f32_add(a, b);       // {6, 8, 10, 12}
+vec_4f32 m = vec_4f32_mul(a, b);       // {5, 12, 21, 32}
+
+// 256-bit: 8 × int32 (AVX2)
+vec_8i32 v = vec_8i32_broadcast(42);
+int32_t sum = vec_8i32_sum(v);         // 336
+
+// Load / store with alignment control
+vec_4f32 d = vec_4f32_load(&data[0]);
+vec_4f32_store(&output[0], c);
+```
+
+| Width | Integer types | Float types |
+|-------|--------------|-------------|
+| 128-bit (SSE/NEON) | `vec_16i8`, `vec_8i16`, `vec_4i32`, `vec_2i64` | `vec_4f32`, `vec_2f64` |
+| 256-bit (AVX/AVX2) | `vec_32i8`, `vec_16i16`, `vec_8i32`, `vec_4i64` | `vec_8f32`, `vec_4f64` |
+| 512-bit (AVX-512) | `vec_64i8`, `vec_32i16`, `vec_16i32`, `vec_8i64` | `vec_16f32`, `vec_8f64` |
+
+Operations: arithmetic (add/sub/mul/div), bitwise (and/or/xor/not), comparison (eq/ne/lt/gt/le/ge), memory (load/store aligned/unaligned), utility (zero/set/broadcast), element-wise min/max, and reductions (sum/min/max).
+
 ---
 
 ## Structure
@@ -137,8 +223,10 @@ quasar/
 The public API uses consistent `prefix_*` namespacing — no C++-style namespaces needed:
 
 ```
-mem_*        str_*        math_*        proc_*
-file_*       path_*       time_*        env_*
+mem_*        str_*        array_*      vec_*
+map_*        list_*       dlist_*      ring_*
+hash_*       math_*       proc_*       file_*
+path_*       time_*       env_*
 ```
 
 ---
@@ -166,12 +254,21 @@ file_*       path_*       time_*        env_*
 - [x] Split/repeat: `str_split()`, `str_repeat()`
 - [x] Utility: `str_copy()`, `str_clear()`, `str_hash()`
 
-### Phase 3 — Data Structures
+### Phase 3 — Data Structures ✅
 
-- [ ] Dynamic arrays
-- [ ] Hash maps
-- [ ] Linked lists
-- [ ] Ring buffers
+- [x] Dynamic arrays (`array_*`, typed `vec_ti32` etc., `vec_v`)
+- [x] Hash maps (`map_*` with str_t keys, FNV-1a hashing, open addressing)
+- [x] Linked lists (`list_*` singly, `dlist_*` doubly)
+- [x] Ring buffers (`ring_*` fixed + dynamic)
+- [x] String vector (`vec_tstr`)
+- [x] Hash functions (`hash_i32`, `hash_f64`, `hash_str`, `hash_bytes`, etc.)
+
+### Phase 3.5 — SIMD Vectors ✅
+
+- [x] 18 fixed-width vector types (128/256/512-bit, integer + float)
+- [x] 20+ operations per type (arithmetic, bitwise, comparison, memory, reductions)
+- [x] Compile-time backend selection (AVX-512 → AVX2 → SSE2 → NEON → scalar)
+- [x] Header-only, zero dependencies
 
 ### Phase 4 — System
 
@@ -211,6 +308,7 @@ Individual modules can be compiled standalone:
 ```sh
 gcc -std=c11 -I include -c src/quasar/std/memory.c
 gcc -std=c11 -I include -c src/quasar/std/strings.c
+gcc -std=c11 -I include -c src/quasar/std/datatypes.c
 ```
 
 ---
